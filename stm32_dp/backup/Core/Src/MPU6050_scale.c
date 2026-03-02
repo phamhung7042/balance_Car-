@@ -1,6 +1,7 @@
 #include "MPU6050_scale.h"
 #include "main.h"
 #include "i2c.h"
+#include <math.h>
 
 Struct_MPU6050 MPU6050;
 
@@ -106,6 +107,8 @@ void MPU6050_Initialization(void)
 	HAL_Delay(50);
 
 	printf("MPU6050 setting is finished\n");
+	// Calibrate to compute pitch offset and init pitch
+	MPU6050_Calibrate();
 }
 /*Get Raw Data from sensor*/
 void MPU6050_Get6AxisRawData(Struct_MPU6050* mpu6050)
@@ -200,8 +203,33 @@ int MPU6050_DataReady(void)
 
 void MPU6050_ProcessData(Struct_MPU6050* mpu6050)
 {
+	// 1. Read and convert
 	MPU6050_Get6AxisRawData(mpu6050);
 	MPU6050_DataConvert(mpu6050);
+
+	// 2. Compute accel-based pitch (deg)
+	float pitch_acc = atan2f(-mpu6050->acc_x, sqrtf(mpu6050->acc_y*mpu6050->acc_y + mpu6050->acc_z*mpu6050->acc_z)) * 57.29578f;
+	pitch_acc -= mpu6050->pitch_offset;
+
+	// 3. Complementary filter (dt tuned to your control loop)
+	const float alpha = 0.98f;
+	const float dt = 0.02f; // keep in sync with control loop
+	mpu6050->pitch = alpha * (mpu6050->pitch + mpu6050->gyro_y * dt) + (1.0f - alpha) * pitch_acc;
+}
+
+void MPU6050_Calibrate(void)
+{
+	float sum = 0.0f;
+	const int samples = 100;
+	for (int i = 0; i < samples; ++i) {
+		MPU6050_Get6AxisRawData(&MPU6050);
+		MPU6050_DataConvert(&MPU6050);
+		float pitch_acc = atan2f(-MPU6050.acc_x, sqrtf(MPU6050.acc_y*MPU6050.acc_y + MPU6050.acc_z*MPU6050.acc_z)) * 57.29578f;
+		sum += pitch_acc;
+		HAL_Delay(5);
+	}
+	MPU6050.pitch_offset = sum / (float)samples;
+	MPU6050.pitch = 0.0f;
 }
 
 /* Utility: get gyro Y in degrees per second (uses converted value) */

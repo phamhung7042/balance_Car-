@@ -23,9 +23,6 @@
 float Current_Pitch = 0.0f;
 
 // --- BIẾN DEBUG ---
-// 1. Góc nghiêng
-float Current_Pitch = 0.0f;
-
 // 2. Tốc độ (m/s)
 float Speed_L_mps = 0.0f;
 float Speed_R_mps = 0.0f;
@@ -76,11 +73,9 @@ int main(void)
       HAL_Delay(5);
     }
     float pitch_offset = sum / (float)samples;
-    // subtract offset from future pitch estimates
+    // store offset in MPU6050 struct for later use
+    MPU6050.pitch_offset = pitch_offset;
     Current_Pitch = 0.0f; // start from zero
-    // store offset in MPU6050.temperature as a cheap storage? (not ideal)
-    // instead keep local static variable if needed; here we'll subtract when computing
-    (void)pitch_offset; // placeholder if needed later
   }
 
   Timer_20ms = HAL_GetTick();
@@ -99,6 +94,8 @@ int main(void)
         float ay = MPU6050.acc_y;
         float az = MPU6050.acc_z;
         float pitch_acc = atan2f(-ax, sqrtf(ay*ay + az*az)) * 57.29577951308232f;
+        // subtract calibrated offset
+        pitch_acc -= MPU6050.pitch_offset;
         float gyro_rate_y = MPU6050.gyro_y; // already in deg/s after DataConvert
         const float alpha = 0.98f;
         const float dt = 0.02f;

@@ -41,6 +41,8 @@ typedef struct _MPU6050{
 	float gyro_x;
 	float gyro_y;
 	float gyro_z;
+	float pitch_offset;
+	float pitch;
 }Struct_MPU6050;
 
 extern Struct_MPU6050 MPU6050;
@@ -50,6 +52,7 @@ void MPU6050_Writebytes(uint8_t reg_addr, uint8_t len, uint8_t* data);
 void MPU6050_Readbyte(uint8_t reg_addr, uint8_t* data);
 void MPU6050_Readbytes(uint8_t reg_addr, uint8_t len, uint8_t* data);
 void MPU6050_Initialization(void);
+void MPU6050_Calibrate(void);
 void MPU6050_Get6AxisRawData(Struct_MPU6050* mpu6050);
 int MPU6050_DataReady(void);
 void MPU6050_Get_LSB_Sensitivity(uint8_t FS_SCALE_GYRO, uint8_t FS_SCALE_ACC);
