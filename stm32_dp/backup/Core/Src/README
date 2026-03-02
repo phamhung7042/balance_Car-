@@ -1,0 +1,81 @@
+```ini
+```
+
+Cấu trúc chung và luồng hoạt động
+
+Mục tiêu: mô tả cách các module chính tương tác và luồng dữ liệu trong hệ thống xe cân bằng.
+
+Module chính và trách nhiệm:
+- `mpu6050.c` / `MPU6050_scale.c`: giao tiếp I2C với MPU6050, đọc accel/gyro, hiệu chỉnh/scale và cung cấp dữ liệu góc/tốc độ góc.
+- `encoder.c` / `encoder_speed.c`: đọc xung encoder, tính vị trí và vận tốc bánh xe.
+- `pid.c`: thuật toán PID; nhận sai số góc/vận tốc và trả về lệnh điều khiển (PWM/duty).
+- `motor.c`: khởi tạo và điều khiển PWM tới driver động cơ; áp dụng lệnh từ PID.
+- `tim.c`: cấu hình timer cho control loop (interrupt) và cho encoder/timebase.
+- `usart.c`: giao tiếp UART để xuất telemetry, debug hoặc nhận lệnh từ PC.
+- `i2c.c` / `spi.c`: driver phần cứng cho giao tiếp (I2C thường cho MPU6050).
+- `main.c`: khởi tạo hệ thống (HAL, clock, peripheral), bắt đầu control loop và quản lý luồng chính.
+- `robot_params.c` / `robot_params.h`: chứa tham số vật lý và tham số điều khiển (PID gains, sampling time).
+
+Luồng dữ liệu điển hình (control loop):
+1. Timer interrupt (ví dụ 200–1000 Hz) kích hoạt đọc cảm biến.
+2. Đọc MPU6050 và encoder → tiền xử lý (lọc, scale) để lấy góc và vận tốc.
+3. PID tính toán dựa trên sai số giữa góc mục tiêu và góc hiện tại.
+4. Output PID gửi đến `motor.c` để cập nhật PWM/điều khiển motor.
+5. (Tuỳ chọn) Ghi telemetry qua UART để phục vụ debug và tuning.
+
+Lưu ý thiết kế thời gian thực:
+- Đặt control loop ưu tiên cao; tránh xử lý nặng trong ISR.
+- Trong ISR chỉ làm việc cần thiết: đọc sensor, cập nhật biến chia sẻ, ghi ring buffer cho log.
+- Sử dụng bộ lọc (complementary/kalman) để kết hợp accel và gyro trước khi đưa vào PID.
+
+Tuning & Debug:
+- Điều chỉnh PID trong `robot_params.c` hoặc `pid.c`.
+- Thay đổi sampling time trong `tim.c` (đảm bảo tương thích với dữ liệu sensor).
+- Dùng UART để xuất góc, giá trị PID và duty để quan sát hành vi hệ thống.
+
+Nếu bạn muốn, tôi có thể:
+- Chèn ví dụ cấu hình timer (tần số control loop) vào `tim.c`.
+- Soạn mục lục chi tiết cho từng file (mô tả hàm public).
+
+Tệp này: [Src/README](Src/README#L1)
+Chuong trinh dieu khien xe can bang
+
+core/
+├── inc/
+│   ├── encoder_speed.h
+│   ├── encoder.h
+│   ├── gpio.h
+│   ├── i2c.h
+│   ├── i2s.h
+│   ├── main.h
+│   ├── motor.h
+│   ├── MPU6050_scale.h
+│   ├── mpu6050.h
+│   ├── pid.h
+│   ├── robot_params.h
+│   ├── spi.h
+│   ├── stm32f4xx_hal_conf.h
+│   ├── stm32f4xx_it.h
+│   ├── tim.h
+│   └── usart.h
+└── src/
+    ├── encoder_speed.c
+    ├── encoder.c
+    ├── gpio.c
+    ├── i2c.c
+    ├── i2s.c
+    ├── main.c
+    ├── motor.c
+    ├── MPU6050_scale.c
+    ├── mpu6050.c
+    ├── pid.c
+    ├── robot_params.c
+    ├── spi.c
+    ├── stm32f4xx_hal_msp.c
+    ├── stm32f4xx_it.c
+    ├── syscalls.c
+    ├── sysmem.c
+    ├── system_stm32f4xx.c
+    ├── tim.c
+    ├── usart.c
+    └── README
