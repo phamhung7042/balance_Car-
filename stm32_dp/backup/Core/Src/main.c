@@ -11,14 +11,16 @@
 #include "gpio.h"
 
 // --- INCLUDE MODULES ---
-#include "MPU6050_scale.h"
+#include "mpu6050.h"
 #include <math.h>
 #include "motor.h"
 #include "encoder.h"
 #include "encoder_speed.h" 
 
 /* Private variables ---------------------------------------------------------*/
-// Use MPU6050_scale module's global `MPU6050`
+// MPU6050 instance
+MPU6050_t mpu6050;
+
 // current pitch estimated by complementary filter
 float Current_Pitch = 0.0f;
 
@@ -55,51 +57,20 @@ int main(void)
   Encoder_Init();       // Reset counter về 0
   EncoderSpeed_Init();  // Lấy mẫu đầu tiên
   
-  // Khởi động MPU (MPU6050_scale)
+  // Khởi động MPU (mpu6050)
   HAL_Delay(100);
-  MPU6050_Initialization();
-
-  // Simple calibration: average accel-derived pitch for offset
-  {
-    float sum = 0.0f;
-    const int samples = 100;
-    for (int i = 0; i < samples; ++i) {
-      MPU6050_ProcessData(&MPU6050);
-      float ax = MPU6050.acc_x;
-      float ay = MPU6050.acc_y;
-      float az = MPU6050.acc_z;
-      float pitch_acc = atan2f(-ax, sqrtf(ay*ay + az*az)) * 57.29577951308232f;
-      sum += pitch_acc;
-      HAL_Delay(5);
-    }
-    float pitch_offset = sum / (float)samples;
-    // store offset in MPU6050 struct for later use
-    MPU6050.pitch_offset = pitch_offset;
-    Current_Pitch = 0.0f; // start from zero
-  }
+  MPU_Init(&mpu6050, &hi2c2);
+  MPU_Calibrate(&mpu6050);
 
   Timer_20ms = HAL_GetTick();
 
   while (1)
   {
-    // ====================================================
-    // LOOP 20ms (50Hz)
-    // ====================================================
     if (HAL_GetTick() - Timer_20ms >= 20)
     {
-        // 1. Đọc MPU6050 (MPU6050_scale)
-        MPU6050_ProcessData(&MPU6050);
-        // complementary filter: combine accel pitch and gyro integration
-        float ax = MPU6050.acc_x;
-        float ay = MPU6050.acc_y;
-        float az = MPU6050.acc_z;
-        float pitch_acc = atan2f(-ax, sqrtf(ay*ay + az*az)) * 57.29577951308232f;
-        // subtract calibrated offset
-        pitch_acc -= MPU6050.pitch_offset;
-        float gyro_rate_y = MPU6050.gyro_y; // already in deg/s after DataConvert
-        const float alpha = 0.98f;
-        const float dt = 0.02f;
-        Current_Pitch = alpha * (Current_Pitch + gyro_rate_y * dt) + (1.0f - alpha) * pitch_acc;
+        // 1. Đọc MPU6050 và lọc bổ sung
+        MPU_Read_And_Filter(&mpu6050);
+        Current_Pitch = mpu6050.Pitch;
 
         // 2. Đọc Encoder (Gọi hàm từ encoder_speed.c)
         // dt = 0.02s (20ms)
