@@ -90,9 +90,6 @@ int main(void)
         Timer_20ms += 20; 
     }
 
-    // ====================================================
-    // LOOP 1s - LED
-    // ====================================================
     if (HAL_GetTick() - Timer_1s >= 1000)
     {
         HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12); 

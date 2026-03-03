@@ -1,4 +1,3 @@
-"./Core/Src/MPU6050_scale.o"
 "./Core/Src/encoder.o"
 "./Core/Src/encoder_speed.o"
 "./Core/Src/gpio.o"
