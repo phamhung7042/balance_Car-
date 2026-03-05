@@ -101,12 +101,88 @@ void MPU_Convert_Data(MPU6050_t *mpu) {
 void MPU_Read_And_Filter(MPU6050_t *mpu) {
     MPU_Read_Raw_Data(mpu);
     MPU_Convert_Data(mpu);
-    
+
     /* Compute pitch from accelerometer */
     float pitch_acc = atan2f(-mpu->Ax, sqrtf(mpu->Ay*mpu->Ay + mpu->Az*mpu->Az)) * RAD_TO_DEG;
     pitch_acc -= mpu->Pitch_Offset;
-    
+
+    /* low‑pass accel pitch to suppress high‑frequency noise */
+    /* acc_alpha closer to 1 = more smoothing */
+    const float acc_alpha = 0.7f;
+    static float acc_pitch_filt = 0.0f;
+    acc_pitch_filt = acc_alpha * acc_pitch_filt + (1.0f - acc_alpha) * pitch_acc;
+    pitch_acc = acc_pitch_filt;
+
+    /* dead‑zone around zero to eliminate tiny jitter */
+    if (fabsf(pitch_acc) < 0.3f) {
+        pitch_acc = 0.0f;
+    }
+
     /* Complementary filter: gyro integration + accel correction */
-    const float alpha = 0.98f;
+    /* dynamic alpha: when gyro rate is very small, trust accel almost fully */
+    float alpha = 0.94f;
+    if (fabsf(mpu->Gy) < 0.3f) {
+        /* robot nearly stationary about pitch axis, accelerate convergence */
+        alpha = 0.6f;
+    }
+
     mpu->Pitch = alpha * (mpu->Pitch + mpu->Gy * DT) + (1.0f - alpha) * pitch_acc;
+
+    /* moving average on final pitch to remove residual jitter */
+    {
+        static float pitch_history[5] = {0};
+        static int pitch_idx = 0;
+        pitch_history[pitch_idx] = mpu->Pitch;
+        pitch_idx = (pitch_idx + 1) % 5;
+        float sum = 0.0f;
+        for (int i = 0; i < 5; ++i) sum += pitch_history[i];
+        mpu->Pitch = sum / 5.0f;
+    }
+
+    /* automatic gyro bias drift correction when robot is approximately stationary */
+    /* accumulate small gyro readings and slowly adjust offset */
+    {
+        static float drift_accum = 0.0f;
+        static int drift_count = 0;
+        const float drift_threshold = 0.5f; // deg/s
+        const int drift_samples = 50;
+        if (fabsf(mpu->Gy) < drift_threshold) {
+            drift_accum += mpu->Gy;
+            drift_count++;
+            if (drift_count >= drift_samples) {
+                float bias = drift_accum / (float)drift_count;
+                mpu->Gyro_Y_Offset += bias * 0.1f; // apply small correction
+                drift_accum = 0.0f;
+                drift_count = 0;
+            }
+        } else {
+            drift_accum = 0.0f;
+            drift_count = 0;
+        }
+    }
+
+    /* auto-adjust pitch offset when sensor remains flat
+       if measured pitch drifts slightly away from zero while gyro
+       rate is small, push Pitch_Offset in the opposite direction. */
+    {
+        static float pitch_err_acc = 0.0f;
+        static int pitch_err_count = 0;
+        const float pitch_threshold = 2.0f; // degrees allowable before correction
+        const float gyro_threshold = 1.0f;  // deg/s
+        const int err_samples = 50;
+        if (fabsf(mpu->Pitch) < pitch_threshold && fabsf(mpu->Gy) < gyro_threshold) {
+            pitch_err_acc += mpu->Pitch;
+            pitch_err_count++;
+            if (pitch_err_count >= err_samples) {
+                float pitch_bias = pitch_err_acc / (float)pitch_err_count;
+                /* subtract bias from offset to drive pitch toward zero */
+                mpu->Pitch_Offset -= pitch_bias * 0.1f;
+                pitch_err_acc = 0.0f;
+                pitch_err_count = 0;
+            }
+        } else {
+            pitch_err_acc = 0.0f;
+            pitch_err_count = 0;
+        }
+    }
 }

@@ -95,11 +95,44 @@ python mpu_3d_visualizer.py
 
 Những sai lệch sẽ hiển thị rõ qua mô hình 3D. Các trục màu (đỏ/xanh lá/xanh dương) biểu diễn hướng robot.
 
+### 🔍 Đọc Xung Encoder Qua SWD (Python)
+
+Để xem giá trị encoder realtime mà không cần UART, sử dụng debug probe
+(cùng loại ST‑Link mà CubeIDE dùng). Script `read_encoder.py` nằm ở thư mục
+`Core/` và đọc hai biến toàn cục `Debug_Enc1_Count`/`Debug_Enc2_Count` từ firmware.
+
+```bash
+pip install pyocd pyelftools
+python read_encoder.py /path/to/your_project.elf
+```
+
+Cắm probe, chạy firmware (hoặc thậm chí đang debug), và script sẽ in
+về màn hình số xung liên tục. Đây là cách "tự động" tương đương với
+Live Expressions nhưng cho phép xuất ra file hoặc xử lý bên ngoài.
+Note: cần có tập tin ELF biên dịch (CubeIDE tạo `Core/Debug/*.elf`).
+
+
 ### 🎯 Các Bước Điều Chỉnh
 
 - Điều chỉnh PID trong `robot_params.c` hoặc `pid.c`.
 - Thay đổi sampling time trong `tim.c` (đảm bảo tương thích với dữ liệu sensor).
 - Kiểm tra kết nối I2C và cảm biến MPU6050 bằng cách quan sát giá trị `mpu6050.Pitch` và `Pitch_Offset` trong quá trình calibration.
+- Gặp dao động quanh 0° (thường 0–5°) ngay cả khi đặt cảm biến nằm ngang? Firmware hiện đã:
+  * smoothing trên accel-pitch
+  * dead‑zone ±0.3°
+  * quyền động alpha (freedom) khi gyro ≈ 0
+  * trung bình trượt 5 mẫu pitch cuối
+  * tự động hiệu chỉnh bias gyro khi tĩnh
+  Nếu vẫn còn rung trong khoảng 5°, thử các bước sau:
+  * Kiểm tra lại **nhiễu cơ khí** hoặc rung động vào board (ví dụ: tắt mọi động cơ, tránh tiếp xúc mạnh).
+  * Đảm bảo robot thực sự tĩnh khi calibrate; gọi `MPU_Calibrate()` lại.
+  * Điều chỉnh các tham số trong `MPU_Read_And_Filter()`:
+    - `acc_alpha` (giá trị nhỏ hơn → mượt hơn)
+    - ngưỡng dead‑zone (tăng lên nếu cần)
+    - độ dài lịch sử trung bình (ví dụ mở rộng từ 5 lên 10 mẫu).
+  * Xem xét sử dụng Kalman filter hoặc bộ lọc IIR bậc 2 nếu jitter vẫn lớn.
+
+
 - Nếu góc liên tục bị lệch ~30°, kiểm tra:
   * Cảm biến có nằm ngang khi calibrate không?
   * Giá trị `Pitch_Offset` và `Gyro_*_Offset` có hợp lý không?

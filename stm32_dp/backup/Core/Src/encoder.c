@@ -20,6 +20,10 @@ static int16_t prev_raw_2 = 0;
 static int32_t acc_count_1 = 0;
 static int32_t acc_count_2 = 0;
 
+// debug symbols exported for external monitoring (e.g., Python over SWD)
+volatile int32_t Debug_Enc1_Count = 0;
+volatile int32_t Debug_Enc2_Count = 0;
+
 void Encoder_Init(void)
 {
     HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
@@ -59,6 +63,13 @@ int32_t Encoder_GetCount(EncoderId id)
 
     *acc      += (int32_t)(sign * diff16);
     *prev_raw  = now;
+
+    // update debug variables (mirror acc_count)
+    if (id == ENCODER_1) {
+        Debug_Enc1_Count = *acc;
+    } else {
+        Debug_Enc2_Count = *acc;
+    }
 
     return *acc;
 }

@@ -28,10 +28,10 @@ typedef struct {
     float Temperature;
     
     /* Calibration offsets */
-    float Pitch_Offset;
+    float Pitch_Offset;        /* accel-derived offset, updated by calibration and auto-correction */
     float Gyro_X_Offset, Gyro_Y_Offset, Gyro_Z_Offset;
     
-    /* Filtered pitch angle */
+    /* Filtered pitch angle (complementary filter output) */
     float Pitch;
     
     /* Full-scale settings */

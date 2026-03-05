@@ -47,5 +47,14 @@ float Encoder_GetSpeed_mps(EncoderId id, float dt)
     float rev_per_sec = ((float)delta / dt) / TICKS_PER_REV;
     float speed_mps   = rev_per_sec * WHEEL_CIRC_M;
 
-    return speed_mps;
+    /* simple IIR low-pass on speed to reduce jitter */
+    static float last_speed_1 = 0.0f;
+    static float last_speed_2 = 0.0f;
+    const float alpha = 0.8f; // 0<alpha<1, closer to 1 retains previous value
+
+    float *p_last = (id == ENCODER_1 ? &last_speed_1 : &last_speed_2);
+    float filt = alpha * (*p_last) + (1.0f - alpha) * speed_mps;
+    *p_last = filt;
+
+    return filt;
 }
