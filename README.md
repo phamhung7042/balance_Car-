@@ -1,3 +1,33 @@
+# STM32F407 Balancing Robot Project
+
+This workspace contains code and resources for a self-balancing robot based on the STM32F407 microcontroller.
+
+## Structure
+
+- `stm32_dp/` - primary firmware source tree (HAL-based) including sensors, PID, motor control, and utilities.
+- `pcb*/` and `src/` - KiCad PCB designs for various boards used in the project.
+- `stm32_dp/backup/` - previous version of firmware and supporting Python tools.
+
+## Recent updates (see `stm32_dp/backup/Core/README_UPDATED.md` for details)
+
+- Consolidated MPU6050 logic and improved calibration.
+- Added Python tools for 3D visualization and oscilloscope-style plotting.
+- Cleaned up modules, added PWM monitoring and direction detection.
+- Updated `main.c` to use instance-based sensor handling.
+
+For full changelog and development notes, read the `README_UPDATED.md` inside the backup/Core folder.
+
+## Getting Started
+
+1. Open `stm32_dp` as a project in STM32CubeIDE.
+2. Build and flash using provided Makefile or IDE.
+3. Use Python scripts for offline debugging (`mpu_3d_visualizer.py`, `read_encoder_revolutions.py`).
+
+---
+
+*Generated automatically by the GitHub Copilot assistant.*
+
+Make by hung 
 # Chương Trình Điều Khiển Xe Cân Bằng STM32F407
 
 ## 📝 CẬP NHẬT NGÀY 05/03/2026 (Cleanup)
@@ -299,6 +329,61 @@ python read_encoder_revolutions.py Debug/stm32_dp.elf --graph
   * Cảm biến có nằm ngang khi calibrate không?
   * Giá trị `Pitch_Offset` và `Gyro_*_Offset` có hợp lý không?
   * Full-scale settings (`FS_GYRO`, `FS_ACCEL`) có đúng không?
+
+---
+
+### 📝 Phản hồi từ giảng viên / điểm cần kiểm tra
+
+**Ưu điểm hiện tại**
+
+1. **Xử lý tràn số (Overflow)**
+   - `encoder_speed.c` sử dụng `int16_t` cho `now` và `prev_raw`.
+   - Việc tính `diff16 = now - *prev_raw` bảo đảm tự động xử lý tràn 16‑bit nhờ bù hai.
+   - Đây là cách chuẩn cho timer 16‑bit của STM32.
+
+2. **Debug trực quan**
+   - Các biến `Debug_Enc1_Count`/`Debug_Enc2_Count` khai báo `volatile int32_t`.
+   - Script Python đọc trực tiếp qua SWD, không cần in UART.
+   - Giúp kiểm tra chính xác hơn và không làm chậm MCU.
+
+3. **Bộ lọc nhiễu**
+   - `encoder_speed.c` dùng bộ lọc IIR với `alpha = 0.8f` cho tốc độ.
+   - Thiết yếu vì tốc độ từ encoder rất nhiễu, có thể gây rung cho LQR.
+
+
+**Vấn đề cần kiểm tra chính xác**
+
+A. **Đảo chiều xung (Signs)**
+
+- `encoder.c` định nghĩa `ENC1_SIGN (-1)` và `ENC2_SIGN (+1)`.
+- LQR yêu cầu hướng vị trí (`x`) và vận tốc (`ẋ`) nhất quán với góc nghiêng (`θ`).
+- Khi đẩy xe về phía trước, cả `Debug_Enc1_Count` và `Debug_Enc2_Count` trong Python phải tăng cùng chiều.
+  Nếu một tăng mà một giảm, robot sẽ quay vòng thay vì giữ thăng bằng.
+
+B. **Đơn vị đo lường (Units)**
+
+- LQR được xây dựng với đơn vị radian và mét (m/s).
+- Hàm `Encoder_GetSpeed_mps` trả về tốc độ bằng m/s.
+- Đảm bảo `TICKS_PER_REV` (1320) và `WHEEL_CIRC_M` trong mã C khớp hoàn toàn với đường kính bánh
+  10 cm được sử dụng trong `read_encoder_revolutions.py`.
+
+
+**Gợi ý cải thiện độ chính xác**
+
+1. **Tăng tần số lấy mẫu**
+   - Hiện đọc encoder mỗi 20 ms (50 Hz) trong `main.c`.
+   - Với xe cân bằng, 50 Hz hơi thấp; nên dùng 10 ms (100 Hz) hoặc 5 ms (200 Hz).
+   - Tần số cao hơn giúp tốc độ `Speed_L_mps` cập nhật kịp cho LQR.
+
+2. **Giảm alpha bộ lọc khi sampling rate tăng**
+   - Khi tần số lấy mẫu tăng, delta xung mỗi chu kỳ giảm, gây "bậc thang" tại tốc độ rất thấp.
+   - Giảm `alpha` (ví dụ xuống 0.5f) trong bộ lọc IIR sẽ làm tốc độ mượt hơn.
+
+3. **Kiểm tra lại các hằng số**
+   - Đảm bảo `TICKS_PER_REV`, `WHEEL_CIRC_M` và bất kỳ tham số vật lý nào khác đồng bộ giữa firmware
+     và script Python để tránh sai lệch quãng đường.
+
+Những đề xuất này giúp tăng độ ổn định LQR và độ chính xác vị trí/ vận tốc.
 
 ---
 

@@ -16,13 +16,18 @@
 #include "motor.h"
 #include "encoder.h"
 #include "encoder_speed.h" 
+#include "lqr.h"  // LQR controller implementation
 
 /* Private variables ---------------------------------------------------------*/
 // MPU6050 instance
 MPU6050_t mpu6050;
 
-// current pitch estimated by complementary filter
+// current pitch estimated by complementary filter (degrees)
 float Current_Pitch = 0.0f;
+
+// ---- LQR controller object --------------------------------
+// gains can be modified via live expressions
+LQR_t lqrController;
 
 // --- BIẾN DEBUG ---
 // 2. Tốc độ (m/s)
@@ -62,6 +67,9 @@ int main(void)
   MPU_Init(&mpu6050, &hi2c2);
   MPU_Calibrate(&mpu6050);
 
+  // init LQR with zero gains; tune later via debugger
+  LQR_Init(&lqrController, 0.0f, 0.0f, 0.0f, 0.0f);
+
   Timer_20ms = HAL_GetTick();
 
   while (1)
@@ -80,12 +88,19 @@ int main(void)
         Pos_L_m = Encoder_GetPosition_m(ENCODER_2);
         Pos_R_m = Encoder_GetPosition_m(ENCODER_1);
 
-        // 3. Test Motor (Chạy Open-Loop để check Encoder)
-        // Nhập giá trị Test_Speed_PWM trong Live Expressions (ví dụ 300)
-        // Nếu bánh quay mà Speed_mps vẫn = 0 -> Sai dây Encoder
-        // Nếu bánh quay tiền mà Speed_mps bị âm -> Đổi chiều trong encoder.c
-        Motor_SetSpeed(MOTOR_1, Test_Speed_PWM);
-        Motor_SetSpeed(MOTOR_2, Test_Speed_PWM);
+
+        // compute u using wrapper that handles state conversion
+        float u = LQR_FromMeasurements(&lqrController,
+                                       &mpu6050,
+                                       Pos_L_m, Pos_R_m,
+                                       Speed_L_mps, Speed_R_mps);
+        int16_t pwm = (int16_t)u;
+        Motor_SetSpeed(MOTOR_1, pwm);
+        Motor_SetSpeed(MOTOR_2, pwm);
+
+        // old open-loop debug commands can stay commented out
+        // Motor_SetSpeed(MOTOR_1, Test_Speed_PWM);
+        // Motor_SetSpeed(MOTOR_2, Test_Speed_PWM);
 
         Timer_20ms += 20; 
     }

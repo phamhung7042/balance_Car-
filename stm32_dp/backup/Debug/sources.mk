@@ -6,7 +6,8 @@
 ELF_SRCS := 
 OBJ_SRCS := 
 S_SRCS := 
-C_SRCS := 
+C_SRCS := \
+  Core/Src/lqr.c
 S_UPPER_SRCS := 
 O_SRCS := 
 CYCLO_FILES := 

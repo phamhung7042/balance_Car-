@@ -62,11 +62,13 @@ parser = argparse.ArgumentParser(description='Read encoder data and PWM from STM
 parser.add_argument('elf_path', help='Path to the ELF file')
 parser.add_argument('--graph', action='store_true', help='Enable graphical oscilloscope display')
 parser.add_argument('--samples', type=int, default=200, help='Number of samples to show in graph (default: 200)')
+parser.add_argument('--csv', type=str, default=None, help='Path to output CSV log file')
 args = parser.parse_args()
 
 elf_path = args.elf_path
 graph_mode = args.graph
 max_samples = args.samples
+csv_path = args.csv
 
 if graph_mode and not GRAPH_AVAILABLE:
     print("Error: matplotlib and numpy required for graph mode. Install with:")
@@ -265,11 +267,29 @@ class OscilloscopeDisplay:
         
         return [self.line_enc1, self.line_enc2, self.line_rate1, self.line_rate2, self.line_rev1, self.line_rev2] + list(self.pwm_lines.values())
 
+import csv
+
+# helper for CSV logging
+csv_file = None
+csv_writer = None
+
 # connect to target
 session = ConnectHelper.session_with_chosen_probe()
 with session:
     target = session.target
     target.resume()          # let CPU run
+
+    # open CSV if requested
+    if csv_path:
+        csv_file = open(csv_path, 'w', newline='')
+        csv_writer = csv.writer(csv_file)
+        # header row - will populate later after pwm_vars resolved
+        header = ['time', 'enc1', 'enc2', 'rev1', 'rev2', 'pulse_rate1', 'pulse_rate2']
+        if pwm_vars:
+            for name, _ in pwm_vars:
+                header.append(name)
+        csv_writer.writerow(header)
+
 
     if graph_mode:
         print(f'Starting oscilloscope display with {max_samples} samples...')
@@ -307,6 +327,15 @@ with session:
             # Update scope data
             scope.update_data(v1, v2, rev1, rev2, pulse_rate1, pulse_rate2, pwm_values)
 
+            # CSV logging if enabled
+            if csv_writer:
+                row = [len(scope.time_data), v1, v2, rev1, rev2, pulse_rate1, pulse_rate2]
+                if pwm_values:
+                    for name, _ in pwm_vars:
+                        row.append(pwm_values.get(name, 0))
+                csv_writer.writerow(row)
+                csv_file.flush()
+
             return scope.update_plot(frame)
 
         # Start animation
@@ -341,11 +370,13 @@ with session:
 
                 # Read PWM values and calculate duty cycle
                 pwm_info = ""
+                pwm_values_dict = {}
                 if pwm_vars:
                     pwm_values = []
                     for name, addr in pwm_vars:
                         try:
                             pwm_val = target.read32(addr)
+                            pwm_values_dict[name] = pwm_val
                             # Calculate duty cycle percentage
                             if pwm_val >= 0:
                                 duty_pct = (pwm_val / PWM_MAX) * 100
@@ -354,11 +385,21 @@ with session:
                                 duty_pct = (abs(pwm_val) / abs(PWM_MIN)) * 100
                                 pwm_values.append(f"{name}={pwm_val} ({duty_pct:5.1f}%)")
                         except:
+                            pwm_values_dict[name] = 0
                             pwm_values.append(f"{name}=ERR")
                     pwm_info = f" | PWM: {' '.join(pwm_values)}"
 
                 print(f'enc1={v1:8d} ({rev1:7.3f} rev) [{dist1:6.3f}m] {dir1}  '
                       f'enc2={v2:8d} ({rev2:7.3f} rev) [{dist2:6.3f}m] {dir2}{pwm_info}', end='\r')
+
+                # CSV logging if requested
+                if csv_writer:
+                    row = [time.time(), v1, v2, rev1, rev2, pulse_rate1, pulse_rate2]
+                    if pwm_vars:
+                        for name, _ in pwm_vars:
+                            row.append(pwm_values_dict.get(name, 0))
+                    csv_writer.writerow(row)
+                    csv_file.flush()
 
                 # Update previous values
                 prev_v1, prev_v2 = v1, v2
