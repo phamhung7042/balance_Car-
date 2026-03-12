@@ -8,14 +8,15 @@ This workspace contains code and resources for a self-balancing robot based on t
 - `pcb*/` and `src/` - KiCad PCB designs for various boards used in the project.
 - `stm32_dp/backup/` - previous version of firmware and supporting Python tools.
 
-## Recent updates (see `stm32_dp/backup/Core/README_UPDATED.md` for details)
+## Change log & notes
+
+This file now contains the full changelog and development notes for the project.  Older copies of the documentation (`README_UPDATED.md` in `stm32_dp/backup/Core/`) may be safely removed; see below.
 
 - Consolidated MPU6050 logic and improved calibration.
 - Added Python tools for 3D visualization and oscilloscope-style plotting.
 - Cleaned up modules, added PWM monitoring and direction detection.
 - Updated `main.c` to use instance-based sensor handling.
 
-For full changelog and development notes, read the `README_UPDATED.md` inside the backup/Core folder.
 
 ## Getting Started
 
@@ -399,7 +400,7 @@ Core/
 │   ├── i2s.h
 │   ├── main.h
 │   ├── motor.h
-│   ├── mpu6050.h          ← Module I2C duy nhất cho MPU6050
+│   ├── mpu6050.h          
 │   ├── pid.h
 │   ├── robot_params.h
 │   ├── spi.h
@@ -415,7 +416,7 @@ Core/
 │   ├── i2s.c
 │   ├── main.c
 │   ├── motor.c
-│   ├── mpu6050.c          ← Module I2C duy nhất cho MPU6050
+│   ├── mpu6050.c          
 │   ├── pid.c
 │   ├── robot_params.c
 │   ├── spi.c
